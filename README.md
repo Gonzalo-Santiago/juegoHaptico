@@ -36,3 +36,5 @@ python game.py
 ```
 
 Verás una ventana negra con un círculo rojo que se mueve según los datos del puente en C++. (Actualmente el código base tiene una *simulación* de movimiento de péndulo en C++ para que veas cómo funciona antes de conectar el hardware real).
+
+# juegoHaptico
