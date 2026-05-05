@@ -7,12 +7,17 @@ project(FalconBridge)
 set(CMAKE_CXX_STANDARD 11)
 set(CMAKE_CXX_STANDARD_REQUIRED True)
 
-# Añadir la librería compartida (DLL en Windows, SO en Linux)
+# Directorio del SDK de Force Dimension (mismo directorio del proyecto)
+set(FD_SDK_DIR ${CMAKE_SOURCE_DIR})
+
+# Añadir la librería compartida (DLL en Windows)
 add_library(falcon_bridge SHARED falcon_bridge.cpp)
 
-# Si utilizas libnifalcon, puedes incluirlo aquí:
-# find_package(libnifalcon REQUIRED)
-# target_link_libraries(falcon_bridge nifalcon)
+# Incluir headers del SDK
+target_include_directories(falcon_bridge PRIVATE ${FD_SDK_DIR})
+
+# Enlazar con la librería del SDK de Force Dimension
+target_link_libraries(falcon_bridge PRIVATE ${FD_SDK_DIR}/dhdms64.lib)
 
 # Mensaje de compilación
 message(STATUS "Generando configuración para la DLL del puente de Falcon")

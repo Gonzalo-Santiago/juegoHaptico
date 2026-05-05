@@ -63,31 +63,6 @@ img_bg.fill((10, 15, 30))
 stars = [(random.randint(0, WIDTH), random.randint(0, HEIGHT), random.randint(1, 3)) for _ in range(100)]
 
 img_player = aircraft_art.draw_player_aircraft(0.7)
-
-# Cargar el logo de la UNSIS para el HUD (costado izquierdo)
-logo_hud = None
-logo_path = os.path.join(os.path.dirname(__file__), "logo_unsis.png")
-try:
-    logo_raw = pygame.image.load(logo_path).convert_alpha()
-    
-    # Crear badge circular con fondo blanco + logo
-    badge_size = 55
-    logo_hud = pygame.Surface((badge_size, badge_size), pygame.SRCALPHA)
-    
-    # Fondo blanco circular
-    pygame.draw.circle(logo_hud, (255, 255, 255, 240), (badge_size // 2, badge_size // 2), badge_size // 2)
-    pygame.draw.circle(logo_hud, (0, 200, 255), (badge_size // 2, badge_size // 2), badge_size // 2, 2)
-    
-    # Escalar logo al tamaño del badge (con margen)
-    logo_inner = int(badge_size * 0.78)
-    logo_scaled = pygame.transform.smoothscale(logo_raw, (logo_inner, logo_inner))
-    offset = (badge_size - logo_inner) // 2
-    logo_hud.blit(logo_scaled, (offset, offset))
-    
-    print("Logo UNSIS cargado para el HUD correctamente.")
-except Exception as e:
-    print(f"Nota: No se pudo cargar el logo ({e}). Verifica que 'logo_unsis.png' esté en la carpeta del proyecto.")
-
 img_enemies = [
     aircraft_art.draw_enemy_standard(0.7),
     aircraft_art.draw_enemy_heavy(0.7),
@@ -118,7 +93,7 @@ boss_group = pygame.sprite.Group()
 particles = []
 
 # Variable de Dificultad Global
-ENEMY_SPEED_BOOST = 10
+ENEMY_SPEED_BOOST = 0
 
 # ==========================================
 # 3. CLASES DEL JUEGO AVANZADAS
@@ -324,10 +299,6 @@ def draw_hud(surface, player, target_locked, current_distance, boss=None):
     surface.blit(lives_lbl, (20, 70))
     for i in range(player.lives):
         pygame.draw.rect(surface, CYAN, (20 + (i*15), 90, 10, 10))
-    
-    # Logo UNSIS en el costado izquierdo del HUD
-    if logo_hud:
-        surface.blit(logo_hud, (15, 110))
 
     dist_lbl = font_small.render("DISTANCE", True, HUD_COLOR)
     dist_val = font_medium.render(f"{int(current_distance)} M", True, WHITE)
@@ -398,7 +369,6 @@ try:
         btn_disparo = (estado_botones & 1) != 0   # Botón Central/Principal
         btn_pausa = (estado_botones & 2) != 0     # Botón Izquierdo
         btn_reinicio = (estado_botones & 4) != 0  # Botón Derecho/Arriba
-        btn_salir = (estado_botones & 8) != 0     # Cuarto Botón (Salir)
     
     for event in pygame.event.get():
         if event.type == pygame.QUIT:
@@ -408,10 +378,6 @@ try:
         if event.type == pygame.KEYDOWN and not soporte_botones_falcon:
             if event.key == pygame.K_p: btn_pausa = True
             if event.key == pygame.K_r: btn_reinicio = True
-            if event.key == pygame.K_ESCAPE: running = False
-
-    if btn_salir:
-        running = False
 
     # Lógica de Pausa (Usa el botón del Falcon)
     if btn_pausa and not last_btn_pausa:

@@ -23,15 +23,6 @@ falcon.init_falcon.restype = ctypes.c_int
 falcon.get_position.argtypes = [ctypes.POINTER(ctypes.c_double), ctypes.POINTER(ctypes.c_double), ctypes.POINTER(ctypes.c_double)]
 falcon.set_force.argtypes = [ctypes.c_double, ctypes.c_double, ctypes.c_double]
 
-# NUEVO: Intentar cargar la función de botones del Falcon
-try:
-    falcon.get_buttons.restype = ctypes.c_int
-    soporte_botones_falcon = True
-    print("Soporte de botones del Falcon: ACTIVADO")
-except AttributeError:
-    soporte_botones_falcon = False
-    print("ADVERTENCIA: falcon_bridge.dll no tiene get_buttons(). Actualiza tu DLL en C++ para usar los botones físicos. Usando teclado temporalmente...")
-
 # ==========================================
 # 2. CONFIGURACIÓN DEL JUEGO Y AUDIO
 # ==========================================
@@ -40,7 +31,7 @@ pygame.mixer.init()
 
 WIDTH, HEIGHT = 600, 800
 screen = pygame.display.set_mode((WIDTH, HEIGHT))
-pygame.display.set_caption("Falcon Strike - Infinite Arcade Edition")
+pygame.display.set_caption("Falcon Strike - Advanced Vector Edition")
 clock = pygame.time.Clock()
 
 # Colores HUD
@@ -63,31 +54,6 @@ img_bg.fill((10, 15, 30))
 stars = [(random.randint(0, WIDTH), random.randint(0, HEIGHT), random.randint(1, 3)) for _ in range(100)]
 
 img_player = aircraft_art.draw_player_aircraft(0.7)
-
-# Cargar el logo de la UNSIS para el HUD (costado izquierdo)
-logo_hud = None
-logo_path = os.path.join(os.path.dirname(__file__), "logo_unsis.png")
-try:
-    logo_raw = pygame.image.load(logo_path).convert_alpha()
-    
-    # Crear badge circular con fondo blanco + logo
-    badge_size = 55
-    logo_hud = pygame.Surface((badge_size, badge_size), pygame.SRCALPHA)
-    
-    # Fondo blanco circular
-    pygame.draw.circle(logo_hud, (255, 255, 255, 240), (badge_size // 2, badge_size // 2), badge_size // 2)
-    pygame.draw.circle(logo_hud, (0, 200, 255), (badge_size // 2, badge_size // 2), badge_size // 2, 2)
-    
-    # Escalar logo al tamaño del badge (con margen)
-    logo_inner = int(badge_size * 0.78)
-    logo_scaled = pygame.transform.smoothscale(logo_raw, (logo_inner, logo_inner))
-    offset = (badge_size - logo_inner) // 2
-    logo_hud.blit(logo_scaled, (offset, offset))
-    
-    print("Logo UNSIS cargado para el HUD correctamente.")
-except Exception as e:
-    print(f"Nota: No se pudo cargar el logo ({e}). Verifica que 'logo_unsis.png' esté en la carpeta del proyecto.")
-
 img_enemies = [
     aircraft_art.draw_enemy_standard(0.7),
     aircraft_art.draw_enemy_heavy(0.7),
@@ -117,8 +83,7 @@ black_holes = pygame.sprite.Group()
 boss_group = pygame.sprite.Group()
 particles = []
 
-# Variable de Dificultad Global
-ENEMY_SPEED_BOOST = 10
+ENEMY_SPEED_BOOST = 0
 
 # ==========================================
 # 3. CLASES DEL JUEGO AVANZADAS
@@ -138,13 +103,13 @@ class Player(pygame.sprite.Sprite):
         self.last_target_x = self.rect.centerx
         self.last_target_y = self.rect.centery
         
+        # NUEVO: Estados de Power-Ups
         self.shield_active = False
         self.spread_timer = 0
 
     def update_position(self, px, pz):
         cx = WIDTH // 2
         cy = HEIGHT - 200
-        
         target_x = cx - (px * 6000)
         target_y = cy - (pz * 6000)
         
@@ -169,6 +134,7 @@ class Player(pygame.sprite.Sprite):
         self.tick += 1
         glow = aircraft_art.draw_thruster_glow(self.tick, 0.7)
         surface.blit(glow, (self.rect.centerx - glow.get_width()//2, self.rect.bottom - 5))
+        # Dibujar escudo si está activo
         if self.shield_active:
             pygame.draw.circle(surface, GREEN, self.rect.center, 40, 2)
 
@@ -182,9 +148,11 @@ class PowerUp(pygame.sprite.Sprite):
         self.rect.centerx = x
         self.rect.centery = y
         self.speed_y = 4
+
     def update(self):
         self.rect.y += self.speed_y
-        if self.rect.top > HEIGHT: self.kill()
+        if self.rect.top > HEIGHT:
+            self.kill()
 
 class BlackHole(pygame.sprite.Sprite):
     def __init__(self):
@@ -195,17 +163,20 @@ class BlackHole(pygame.sprite.Sprite):
         self.rect.y = -100
         self.speed_y = 2
         self.tick = 0
+
     def update(self):
         self.tick += 5
         self.rect.y += self.speed_y
         self.image.fill((0, 0, 0, 0))
         pygame.draw.circle(self.image, PURPLE, (40, 40), 30 + math.sin(math.radians(self.tick))*5, 2)
         pygame.draw.circle(self.image, BLACK, (40, 40), 25)
-        if self.rect.top > HEIGHT: self.kill()
+        if self.rect.top > HEIGHT:
+            self.kill()
 
 class Boss(pygame.sprite.Sprite):
     def __init__(self):
         super().__init__()
+        # Hacemos al jefe escalando un enemigo normal para reutilizar el arte
         raw_img = img_enemies[1]
         self.image = pygame.transform.scale(raw_img, (raw_img.get_width()*3, raw_img.get_height()*3))
         self.rect = self.image.get_rect()
@@ -215,18 +186,24 @@ class Boss(pygame.sprite.Sprite):
         self.max_hp = 1000
         self.state = "ENTER"
         self.speed_x = 3
+
     def update(self):
         if self.state == "ENTER":
             self.rect.y += 2
-            if self.rect.top >= 20: self.state = "FIGHT"
+            if self.rect.top >= 20:
+                self.state = "FIGHT"
         elif self.state == "FIGHT":
             self.rect.x += self.speed_x
-            if self.rect.left < 20 or self.rect.right > WIDTH - 20: self.speed_x *= -1
+            if self.rect.left < 20 or self.rect.right > WIDTH - 20:
+                self.speed_x *= -1
+            
+            # Disparo del jefe
             if random.random() < 0.08:
                 eb = EnemyBullet(self.rect.centerx, self.rect.bottom)
                 all_sprites.add(eb)
                 enemy_bullets.add(eb)
 
+# Clases anteriores (Bullet, EnemyBullet, Enemy, ExplosionParticle) se mantienen igual
 class Bullet(pygame.sprite.Sprite):
     def __init__(self, x, y):
         super().__init__()
@@ -288,11 +265,13 @@ class ExplosionParticle:
         self.vy = math.sin(angle) * speed
         self.life = 255
         self.color = random.choice([(255, 200, 0), (255, 100, 0), (255, 50, 50)])
+
     def update(self):
         self.x += self.vx
         self.y += self.vy
         self.life -= 15
         self.size -= 0.1
+
     def draw(self, surface):
         if self.life > 0 and self.size > 0:
             color = (*self.color, max(0, self.life))
@@ -324,16 +303,13 @@ def draw_hud(surface, player, target_locked, current_distance, boss=None):
     surface.blit(lives_lbl, (20, 70))
     for i in range(player.lives):
         pygame.draw.rect(surface, CYAN, (20 + (i*15), 90, 10, 10))
-    
-    # Logo UNSIS en el costado izquierdo del HUD
-    if logo_hud:
-        surface.blit(logo_hud, (15, 110))
 
     dist_lbl = font_small.render("DISTANCE", True, HUD_COLOR)
     dist_val = font_medium.render(f"{int(current_distance)} M", True, WHITE)
     surface.blit(dist_lbl, (WIDTH - 140, 65))
     surface.blit(dist_val, (WIDTH - 140, 80))
 
+    # Barra del Jefe
     if boss and boss.state == "FIGHT":
         pygame.draw.rect(surface, DARK_RED, (100, HEIGHT - 30, WIDTH - 200, 15))
         boss_ratio = max(0, boss.hp / boss.max_hp)
@@ -347,7 +323,7 @@ def draw_hud(surface, player, target_locked, current_distance, boss=None):
         surface.blit(lock_txt, (player.rect.right + 10, player.rect.centery))
 
 # ==========================================
-# 5. INICIALIZACIÓN Y BUCLE PRINCIPAL
+# 5. INICIALIZACIÓN
 # ==========================================
 print("Conectando con el Novint Falcon...")
 if falcon.init_falcon() != 0:
@@ -372,84 +348,48 @@ last_shot = pygame.time.get_ticks()
 shoot_delay = 120
 
 game_distance = 0.0
-last_level_boosted = 0
-boss_active = False
-current_boss = None
+level_increased = False
 level_msg_timer = 0
-level_msg_text = ""
+boss_spawned = False
+current_boss = None
 
-# NUEVO: Variables de anti-rebote para los botones del Falcon
-last_btn_pausa = False
-last_btn_reinicio = False
-
-try:
- while running:
+while running:
     falcon.get_position(ctypes.byref(px_falcon), ctypes.byref(py_falcon), ctypes.byref(pz_falcon))
-    
-    # NUEVO: Lectura de botones del Falcon
-    btn_disparo = False
-    btn_pausa = False
-    btn_reinicio = False
-    
-    if soporte_botones_falcon:
-        # La DLL debe retornar un int con la máscara de bits de los botones pulsados
-        estado_botones = falcon.get_buttons()
-        # Puedes ajustar los números (1, 2, 4) según cómo estén cableados tus botones físicos
-        btn_disparo = (estado_botones & 1) != 0   # Botón Central/Principal
-        btn_pausa = (estado_botones & 2) != 0     # Botón Izquierdo
-        btn_reinicio = (estado_botones & 4) != 0  # Botón Derecho/Arriba
-        btn_salir = (estado_botones & 8) != 0     # Cuarto Botón (Salir)
     
     for event in pygame.event.get():
         if event.type == pygame.QUIT:
             running = False
             
-        # Mantenemos el teclado SOLO como plan de respaldo si la DLL falla
-        if event.type == pygame.KEYDOWN and not soporte_botones_falcon:
-            if event.key == pygame.K_p: btn_pausa = True
-            if event.key == pygame.K_r: btn_reinicio = True
-            if event.key == pygame.K_ESCAPE: running = False
-
-    if btn_salir:
-        running = False
-
-    # Lógica de Pausa (Usa el botón del Falcon)
-    if btn_pausa and not last_btn_pausa:
-        if not game_over:
-            is_paused = not is_paused
-    last_btn_pausa = btn_pausa
-
-    # Lógica de Reinicio (Usa el botón del Falcon)
-    if btn_reinicio and not last_btn_reinicio:
-        if game_over or is_paused:
-            game_over = is_paused = boss_active = False
-            game_distance = ENEMY_SPEED_BOOST = 0.0
-            last_level_boosted = 0
-            current_boss = None
+        if event.type == pygame.KEYDOWN:
+            if event.key == pygame.K_p and not game_over:
+                is_paused = not is_paused
             
-            player.health, player.lives, player.score = 100, 3, 0
-            player.shield_active = False
-            player.spread_timer = 0
-            player.speed_factor = 0.15
-            player.rect.centerx, player.rect.bottom = WIDTH // 2, HEIGHT - 40
-            
-            for g in [enemies, bullets, enemy_bullets, powerups, black_holes, boss_group]:
-                for sprite in g: sprite.kill()
-            particles.clear()
-            
-            for i in range(5):
-                e = Enemy()
-                all_sprites.add(e)
-                enemies.add(e)
-    last_btn_reinicio = btn_reinicio
+            if event.key == pygame.K_r and (game_over or is_paused):
+                # REINICIO COMPLETO
+                game_over = is_paused = boss_spawned = level_increased = False
+                game_distance = ENEMY_SPEED_BOOST = 0.0
+                current_boss = None
+                
+                player.health, player.lives, player.score = 100, 3, 0
+                player.shield_active = False
+                player.spread_timer = 0
+                player.rect.centerx, player.rect.bottom = WIDTH // 2, HEIGHT - 40
+                
+                for g in [enemies, bullets, enemy_bullets, powerups, black_holes, boss_group]:
+                    for sprite in g: sprite.kill()
+                particles.clear()
+                
+                for i in range(5):
+                    e = Enemy()
+                    all_sprites.add(e)
+                    enemies.add(e)
 
     if game_over:
         falcon.set_force(0.0, 0.0, 0.0)
         screen.fill((10, 15, 30))
         go_text = font_large.render("G A M E   O V E R", True, RED)
         sc_text = font_medium.render(f"Final Score: {player.score}", True, WHITE)
-        # Texto actualizado para reflejar que usa botones del dispositivo
-        ex_text = font_small.render("Usa el BOTÓN DERECHO del Falcon para Reiniciar.", True, CYAN)
+        ex_text = font_small.render("Presiona 'R' para Reiniciar.", True, CYAN)
         screen.blit(go_text, (WIDTH//2 - go_text.get_width()//2, HEIGHT//2 - 50))
         screen.blit(sc_text, (WIDTH//2 - sc_text.get_width()//2, HEIGHT//2 + 10))
         screen.blit(ex_text, (WIDTH//2 - ex_text.get_width()//2, HEIGHT//2 + 80))
@@ -469,46 +409,34 @@ try:
         screen.blit(overlay, (0, 0))
         
         pause_txt = font_large.render("P A U S A", True, HUD_COLOR)
-        # Texto actualizado para reflejar que usa botones del dispositivo
-        resume_txt = font_small.render("Pausa (Botón Izquierdo) | Reiniciar (Botón Derecho)", True, WHITE)
         screen.blit(pause_txt, (WIDTH//2 - pause_txt.get_width()//2, HEIGHT//2 - 20))
-        screen.blit(resume_txt, (WIDTH//2 - resume_txt.get_width()//2, HEIGHT//2 + 30))
         pygame.display.flip()
         clock.tick(30)
         continue
 
     # --- JUEGO ACTIVO ---
-    
-    if not boss_active:
+    if not boss_spawned or current_boss is None:
         game_distance += 0.05  
     
-    current_level = int(game_distance // 100)
-    
-    if current_level > last_level_boosted:
-        last_level_boosted = current_level
-        
-        if current_level % 2 == 0 and current_level > 0:
-            boss_active = True
-            current_boss = Boss()
-            current_boss.hp = 1000 + (current_level * 250)
-            current_boss.max_hp = current_boss.hp
-            all_sprites.add(current_boss)
-            boss_group.add(current_boss)
-            
-            for e in enemies: e.kill() 
-            
-            level_msg_timer = 180
-            level_msg_text = f"¡ALERTA: NAVE NODRIZA MK-{current_level//2} DETECTADA!"
-        else:
-            if player.speed_factor < 0.6: 
-                player.speed_factor += 0.05  
-            ENEMY_SPEED_BOOST += 1.5       
-            for e in enemies: e.speed_y += 1.5
-            
-            level_msg_timer = 180       
-            level_msg_text = f"NIVEL {current_level}: ¡VELOCIDAD AUMENTADA!"
+    # DIFICULTAD (100m)
+    if game_distance >= 100 and not level_increased:
+        level_increased = True
+        player.speed_factor = 0.45  
+        ENEMY_SPEED_BOOST = 3       
+        level_msg_timer = 180       
+        for e in enemies: e.speed_y += ENEMY_SPEED_BOOST
 
-    if random.random() < 0.002 and not boss_active:
+    # JEFE FINAL (200m)
+    if game_distance >= 200 and not boss_spawned:
+        boss_spawned = True
+        current_boss = Boss()
+        all_sprites.add(current_boss)
+        boss_group.add(current_boss)
+        for e in enemies: e.kill() # Limpiamos enemigos normales
+        level_msg_timer = 180
+
+    # EVENTO RANDOM: Agujero Negro
+    if random.random() < 0.002 and not boss_spawned:
         bh = BlackHole()
         all_sprites.add(bh)
         black_holes.add(bh)
@@ -516,13 +444,10 @@ try:
     target_locked = any(abs(e.rect.centerx - player.rect.centerx) < 35 and e.rect.centery < player.rect.centery for e in enemies)
     if current_boss and abs(current_boss.rect.centerx - player.rect.centerx) < 50: target_locked = True
             
-    # Lógica de disparo actualizada (Ahora lee el botón central del Falcon o la tecla Espacio si la DLL falla)
     keys = pygame.key.get_pressed()
     now = pygame.time.get_ticks()
     
-    condicion_disparo = btn_disparo if soporte_botones_falcon else keys[pygame.K_SPACE]
-    
-    if condicion_disparo and now - last_shot > shoot_delay:
+    if keys[pygame.K_SPACE] and now - last_shot > shoot_delay:
         last_shot = now
         snd_shoot.play()
         if player.spread_timer > 0:
@@ -545,15 +470,17 @@ try:
         if p.life <= 0: particles.remove(p)
     for i in range(len(stars)):
         x, y, s = stars[i]
-        stars[i] = (x, y + s if not boss_active else y + (s * 0.2), s) 
+        stars[i] = (x, y + s if not boss_spawned else y + (s * 0.2), s) # Las estrellas frenan en el boss
         if stars[i][1] >= HEIGHT: stars[i] = (random.randint(0, WIDTH), 0, s)
 
+    # Colisiones Jugador -> Enemigos/Boss
     hits = pygame.sprite.groupcollide(enemies, bullets, True, True)
     for hit in hits:
         snd_exp.play()
         player.score += 25
         for _ in range(15): particles.append(ExplosionParticle(hit.rect.centerx, hit.rect.centery))
         
+        # Probabilidad de soltar PowerUp
         if random.random() < 0.15:
             pu = PowerUp(hit.rect.centerx, hit.rect.centery)
             all_sprites.add(pu)
@@ -569,22 +496,18 @@ try:
         snd_exp.play()
         for _ in range(5): particles.append(ExplosionParticle(boss.rect.centerx + random.randint(-50,50), boss.rect.centery))
         if boss.hp <= 0:
-            player.score += 1500
+            player.score += 1000
             boss.kill()
             current_boss = None
-            boss_active = False
             for _ in range(50): particles.append(ExplosionParticle(boss.rect.centerx, boss.rect.centery))
-            
-            for i in range(5):
-                e = Enemy()
-                all_sprites.add(e)
-                enemies.add(e)
 
+    # Colisiones Jugador -> PowerUps
     pu_hits = pygame.sprite.spritecollide(player, powerups, True)
     for pu in pu_hits:
         if pu.type == "SHIELD": player.shield_active = True
-        elif pu.type == "SPREAD": player.spread_timer = 600 
+        elif pu.type == "SPREAD": player.spread_timer = 600 # 10 segundos a 60fps
 
+    # Colisiones Enemigos -> Jugador
     crash = pygame.sprite.spritecollide(player, enemies, True) + pygame.sprite.spritecollide(player, enemy_bullets, True)
     if current_boss and pygame.sprite.collide_rect(player, current_boss):
         crash.append(current_boss)
@@ -592,7 +515,7 @@ try:
     for hit in crash:
         impact_frames = 15
         if player.shield_active:
-            player.shield_active = False 
+            player.shield_active = False # Rompe escudo
             snd_exp.play()
         else:
             snd_exp.play()
@@ -605,7 +528,7 @@ try:
                 else:
                     player.health = 100
                     player.score = max(0, player.score - 50)
-                    player.shield_active = True 
+                    player.shield_active = True # Escudo de invulnerabilidad temporal al revivir
 
         if isinstance(hit, Enemy):
             e = Enemy()
@@ -617,25 +540,28 @@ try:
     f_y = -30.0 * py_falcon.value 
     f_z = 0.0
     
+    # 1. Fuerza de los Agujeros Negros (Gravedad)
     for bh in black_holes:
         dx = bh.rect.centerx - player.rect.centerx
         dy = bh.rect.centery - player.rect.centery
         dist = math.hypot(dx, dy)
-        if 20 < dist < 300: 
+        if 20 < dist < 300: # Rango de efecto
             fuerza_gravedad = 150.0 / dist
             f_x += (dx / dist) * fuerza_gravedad
-            f_z -= (dy / dist) * fuerza_gravedad 
+            f_z -= (dy / dist) * fuerza_gravedad # Eje Z del Falcon invertido al Y de pantalla
 
+    # 2. Rumble del Jefe
     if current_boss and current_boss.state == "FIGHT":
-        f_y += random.uniform(-0.5, 0.5) 
+        f_y += random.uniform(-1.0, 1.0) # Tensión constante en el ambiente
     
+    # 3. Disparo y daño
     if recoil_frames > 0:
         f_z += 3.0 
         recoil_frames -= 1
         
     if impact_frames > 0:
-        f_x += random.uniform(-3.5, 3.5)
-        f_z += random.uniform(-3.5, 3.5)
+        f_x += random.uniform(-3, 3)
+        f_z += random.uniform(-3, 3)
         impact_frames -= 1
 
     falcon.set_force(f_x, f_y, f_z)
@@ -653,16 +579,14 @@ try:
         msg_bg = pygame.Surface((WIDTH, 60)); msg_bg.set_alpha(150); msg_bg.fill(BLACK)
         screen.blit(msg_bg, (0, HEIGHT//2 - 30))
         
-        warn_txt = font_medium.render(level_msg_text, True, RED if boss_active else HUD_COLOR)
+        texto = "¡VELOCIDAD AUMENTADA!" if not boss_spawned else "¡ALERTA: NAVE NODRIZA DETECTADA!"
+        warn_txt = font_large.render(texto, True, RED if boss_spawned else HUD_COLOR)
         screen.blit(warn_txt, (WIDTH//2 - warn_txt.get_width()//2, HEIGHT//2 - warn_txt.get_height()//2))
         level_msg_timer -= 1
     
     pygame.display.flip()
     clock.tick(60)
 
-except KeyboardInterrupt:
-    pass
-finally:
-    print("Cerrando Falcon...")
-    falcon.close_falcon()
-    pygame.quit()
+print("Cerrando Falcon...")
+falcon.close_falcon()
+pygame.quit()
